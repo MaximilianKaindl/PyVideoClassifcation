@@ -1,0 +1,44 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Classification",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "resources/door_opening_176.mp4"
+            ]
+        },
+        {
+            "name": "Convert ViT-B-32",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/converters/clip_to_pt.py",
+            "console": "integratedTerminal",
+            "args": [
+                "ViT-B-32",
+                "datacomp_xl_s13b_b90k",
+                "out/openclip-vit-b-32.pt",
+                "resources/input.png"
+            ]
+        },
+        {
+            "name": "Convert ViT-L-14",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/converters/clip_to_pt.py",
+            "console": "integratedTerminal",
+            "args": [
+                "ViT-L-14",
+                "datacomp_xl_s13b_b90k",
+                "out/openclip-vit-l-14.pt",
+                "resources/input.png"
+            ]
+        }
+    ]
+}

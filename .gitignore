@@ -1,0 +1,5 @@
+/ffmpeg_tools
+/resources
+*/__pycache__/*
+.pyc
+out/*
