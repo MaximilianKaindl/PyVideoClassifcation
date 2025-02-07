@@ -5,6 +5,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - accelerate=1.3.0=pyhd8ed1ab_0
   - aiohappyeyeballs=2.4.4=py312haa95532_0
   - aiohttp=3.11.10=py312h827c3e9_0
   - aiosignal=1.2.0=pyhd3eb1b0_0
@@ -31,8 +32,8 @@ dependencies:
   - brotli-python=1.0.9=py312hd77b12b_8
   - bzip2=1.0.8=h2bbff1b_6
   - c-ares=1.19.1=h2bbff1b_0
-  - ca-certificates=2024.12.14=h56e8100_0
-  - certifi=2024.12.14=pyhd8ed1ab_0
+  - ca-certificates=2024.12.31=haa95532_0
+  - certifi=2025.1.31=py312haa95532_0
   - cffi=1.17.1=py312h4389bb4_0
   - charset-normalizer=3.3.2=pyhd3eb1b0_0
   - colorama=0.4.6=py312haa95532_0
@@ -162,6 +163,7 @@ dependencies:
   - platformdirs=4.3.6=pyhd8ed1ab_1
   - pooch=1.8.2=pyhd8ed1ab_1
   - propcache=0.2.0=py312h827c3e9_0
+  - psutil=5.9.0=py312h827c3e9_1
   - pyarrow=17.0.0=py312h0158946_0
   - pycparser=2.22=pyh29332c3_1
   - pyparsing=3.2.0=pyhd8ed1ab_2
