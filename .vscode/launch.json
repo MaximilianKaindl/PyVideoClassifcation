@@ -5,13 +5,27 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Classification",
+            "name": "FFMPEG Classify Video",
             "type": "debugpy",
             "request": "launch",
-            "program": "src/main.py",
+            "program": "src/ffmpeg_classification/classify_movie.py",
             "console": "integratedTerminal",
             "args": [
-                "resources/door_opening_176.mp4"
+                "--ffmpeg", "./ffmpeg_tools/ffmpeg",
+                "--input", "resources/cartoon.mp4",
+                "--model", "resources/models/openclip-vit-l-14.pt",
+                "--tokenizer", "resources/tokenizer.json", 
+                "--labels", "resources/labels.txt"
+            ]
+        },
+        {
+            "name": "PYTHON Classify Video",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/py_classification/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "resources/cartoon.mp4"
             ]
         },
         {
