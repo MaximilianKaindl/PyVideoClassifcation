@@ -21,7 +21,7 @@ PyVideoClassifcation is a Python project for classifying videos using different 
 ## Usage
 
 ### FFMPEG Classify Video
-
+FFMPEG CLIP classification requires a scripted model in the .pt format and the tokenizer.json from huggingface
 ```sh
 python src/run_ffmpeg_classify.py \
     --ffmpeg ./ffmpeg_tools/ffmpeg \
@@ -47,8 +47,8 @@ python src/run_py_classify.py resources/cartoon.mp4
 python src/converters/clip_to_pt.py \
     ViT-B-32 \
     datacomp_xl_s13b_b90k \
-    out/openclip-vit-b-32.pt \
-    resources/input.png
+    resources/models/openclip-vit-b-32.pt \
+    resources/input.jpg
 ```
 
 #### Convert ViT-L-14
@@ -57,6 +57,6 @@ python src/converters/clip_to_pt.py \
 python src/converters/clip_to_pt.py \
     ViT-L-14 \
     datacomp_xl_s13b_b90k \
-    out/openclip-vit-l-14.pt \
-    resources/input.png
+    resources/models/openclip-vit-l-14.pt \
+    resources/input.jpg
 ```
