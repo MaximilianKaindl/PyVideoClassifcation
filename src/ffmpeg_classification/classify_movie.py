@@ -58,7 +58,7 @@ def run_clip_classification(ffmpeg_bin, input_file, model_file, tokenizer_file, 
     cmd = [
         ffmpeg_bin,
         '-i', input_file,
-        '-vf', f'dnn_clip=dnn_backend=torch:model={model_file}:labels={temp_labels}:tokenizer={tokenizer_file},avgclass=output_file={temp_output}',
+        '-vf', f'dnn_clip=dnn_backend=torch:model={model_file}:device=cuda:labels={temp_labels}:tokenizer={tokenizer_file},avgclass=output_file={temp_output}',
         '-f', 'null', '-'
     ]
     
