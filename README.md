@@ -23,7 +23,12 @@ PyVideoClassifcation is a Python project for classifying videos using different 
 ### FFMPEG Classify Video
 
 ```sh
-python src/ffmpeg_classification/classify_movie.py --ffmpeg ./ffmpeg_tools/ffmpeg --input resources/cartoon.mp4 --model resources/models/openclip-vit-l-14.pt --tokenizer resources/tokenizer.json --labels resources/labels.txt
+python src/run_ffmpeg_classify.py \
+    --ffmpeg ./ffmpeg_tools/ffmpeg \
+    --input resources/cartoon.mp4 \
+    --model resources/models/openclip-vit-l-14.pt \
+    --tokenizer resources/tokenizer.json \
+    --labels resources/labels.txt
 ```
 
 ### Python Classify Video
@@ -31,7 +36,7 @@ python src/ffmpeg_classification/classify_movie.py --ffmpeg ./ffmpeg_tools/ffmpe
 This will automatically download the default models laion/CLIP-ViT-L-14-DataComp.XL-s13B-b90K and openai/whisper-large-v3-turbo from Huggingface
 
 ```sh
-python src/py_classification/main.py resources/cartoon.mp4
+python src/run_py_classify.py resources/cartoon.mp4
 ```
 
 ### Sample Model Conversion to .pt
@@ -39,11 +44,19 @@ python src/py_classification/main.py resources/cartoon.mp4
 #### Convert ViT-B-32
 
 ```sh
-python src/converters/clip_to_pt.py ViT-B-32 datacomp_xl_s13b_b90k out/openclip-vit-b-32.pt resources/input.png
+python src/converters/clip_to_pt.py \
+    ViT-B-32 \
+    datacomp_xl_s13b_b90k \
+    out/openclip-vit-b-32.pt \
+    resources/input.png
 ```
 
 #### Convert ViT-L-14
 
 ```sh
-python src/converters/clip_to_pt.py ViT-L-14 datacomp_xl_s13b_b90k out/openclip-vit-l-14.pt resources/input.png
+python src/converters/clip_to_pt.py \
+    ViT-L-14 \
+    datacomp_xl_s13b_b90k \
+    out/openclip-vit-l-14.pt \
+    resources/input.png
 ```
