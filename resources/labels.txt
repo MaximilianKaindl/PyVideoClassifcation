@@ -1,49 +1,20 @@
 [RecordingSystem]
-A video recorded with a mobile phone
-A video recorded with a handheld consumer camera
-A video recorded with a static consumer camera
-A video recorded with professional equipment
-A video recorded by a drone
+a professional recording with high production value
+an amateur recording with low production value
 [ContentType]
-A short film
-A documentary
-A news report
-An educational video
-A vlog
-A promotional video
-A music video
-A sports broadcast
-A surveillance video
-An experimental film
-An animated video
-A user-generated video
-An episode of a TV series
-A TV show
-A video of unknown type
+a video showing a lecture or educational content
+a video showing entertainment or performance
+a video showing news or journalism
+a video showing promotional or advertising content
 [Genre]
-An action video
-An adventure video
-A comedy video
-A dramatic video
-A horror video
-A science fiction video
-A fantasy video
-A romantic video
-A mystery video
-A crime video
-A western video
-A war video
-A biographical video
-A historical video
-A musical video
-A sports video
-A family-friendly video
-An animated video
-A documentary-style video
-A news video
-An educational video
-An art house video
-A thriller video
-An adult video
-A mixed-genre video
-A video of unknown genre
+a comedy video
+a drama video
+an action video
+a documentary video
+a horror video
+a romance video
+a sci-fi video
+a thriller video
+a mystery video
+a musical video
+an animation video
