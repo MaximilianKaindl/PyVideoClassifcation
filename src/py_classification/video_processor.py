@@ -23,8 +23,8 @@ class HWAccelConfig:
     @classmethod
     def from_type(cls, accel_type: HWAccelType) -> 'HWAccelConfig':
         if accel_type == HWAccelType.NVIDIA:
-            return cls(decode='-hwaccel cuda', encode='-c:v h264_nvenc', scale='scale')
-        return cls(decode='', encode='-c:v libx264', scale='scale')
+            return cls(decode='', encode='', scale='scale')
+        return cls(decode='', encode='', scale='scale')
 
 @dataclass
 class VideoInfo:
