@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional
+from typing import Dict, List, Optional
 import logging
 import torch
 import numpy as np
 
-from models import create_model
-from video_processor import VideoProcessor, VideoInfo, SceneAnalysis, AudioFeatures
+from util.clip_model import create_model
+from util.video_processor import FFMPEGVideoProcessor, VideoInfo, SceneAnalysis, AudioFeatures
 
 @dataclass
 class ClassificationResult:
@@ -15,15 +15,14 @@ class ClassificationResult:
     confidence: float
 
 @dataclass
-class TaskPredictions:
-    recording: List[ClassificationResult]
-    content: List[ClassificationResult]
-    genre: List[ClassificationResult]
+class CategoryPredictions:
+    """Predictions for a single category"""
+    predictions: List[ClassificationResult]
 
 @dataclass
 class VideoAnalysis:
     technical: VideoInfo
-    classifications: TaskPredictions
+    classifications: Dict[str, CategoryPredictions]
     scene_analysis: SceneAnalysis
     audio_analysis: AudioFeatures
 
@@ -37,6 +36,7 @@ class VideoClassifier:
     def __init__(
         self,
         model_path: Optional[str] = None,
+        labels_file: Optional[str] = None,
         num_frames: int = 32,
         top_k: int = 3
     ):
@@ -44,11 +44,12 @@ class VideoClassifier:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.num_frames = num_frames
         self.top_k = top_k
+        self.labels_file = labels_file
         
         self.logger.info(f"Initializing VideoClassifier using device: {self.device}")
         
         # Initialize video processor
-        self.video_processor = VideoProcessor()
+        self.video_processor = FFMPEGVideoProcessor()
         
         # Initialize model
         self._initialize_model(model_path)
@@ -56,7 +57,7 @@ class VideoClassifier:
     def _initialize_model(self, model_path: Optional[str]) -> None:
         """Initialize and load the CLIP model"""
         try:
-            self.model = create_model()
+            self.model = create_model(labels_file=self.labels_file)
             
             if model_path:
                 model_path = Path(model_path)
@@ -67,28 +68,25 @@ class VideoClassifier:
                     )
                 else:
                     self.logger.warning(
-                        f"Model path {model_path} does not exist. "
-                        "Using default weights."
+                        f"Model path {model_path} does not exist. Using default weights."
                     )
             
             self.model.to(self.device)
             self.model.eval()
             
-            # Cache label lists for each task using new structure
-            self.recording_labels = self.model.prompts.recording
-            self.content_labels = self.model.prompts.content
-            self.genre_labels = self.model.prompts.genre
+            # Cache labels
+            self.labels = self.model.labels
             
         except Exception as e:
             self.logger.error(f"Failed to initialize model: {str(e)}")
             raise VideoClassificationError(f"Model initialization failed: {str(e)}")
     
-    def _get_task_predictions(
+    def _get_category_predictions(
         self,
         logits: torch.Tensor,
         labels: List[str]
     ) -> List[ClassificationResult]:
-        """Convert model logits to classification results"""
+        """Convert model logits to classification results for a category"""
         probs = torch.softmax(logits, dim=1)[0].cpu().numpy()
         top_indices = np.argsort(probs)[-self.top_k:][::-1]
         
@@ -118,28 +116,26 @@ class VideoClassifier:
     def _run_model_inference(
         self,
         frames: List[np.ndarray]
-    ) -> TaskPredictions:
+    ) -> Dict[str, CategoryPredictions]:
         """Run model inference on processed frames"""
         try:
             processed_frames = self._prepare_frames(frames)
             
             with torch.no_grad():
-                outputs = self.model(processed_frames)
+                model_output = self.model(processed_frames)
+                classifications = {}
                 
-                return TaskPredictions(
-                    recording=self._get_task_predictions(
-                        outputs.recording,  # Changed from outputs['recording']
-                        self.recording_labels
-                    ),
-                    content=self._get_task_predictions(
-                        outputs.content,    # Changed from outputs['content']
-                        self.content_labels
-                    ),
-                    genre=self._get_task_predictions(
-                        outputs.genre,      # Changed from outputs['genre']
-                        self.genre_labels
+                # Process each category
+                for category, logits in model_output.logits.items():
+                    predictions = self._get_category_predictions(
+                        logits,
+                        self.labels.categories[category]
                     )
-                )
+                    classifications[category] = CategoryPredictions(
+                        predictions=predictions
+                    )
+                
+                return classifications
                 
         except Exception as e:
             self.logger.error(f"Model inference failed: {str(e)}")
@@ -208,11 +204,16 @@ class VideoClassifierBuilder:
     
     def __init__(self):
         self.model_path = None
+        self.labels_file = None
         self.num_frames = 32
         self.top_k = 3
     
     def with_model(self, model_path: str) -> 'VideoClassifierBuilder':
         self.model_path = model_path
+        return self
+    
+    def with_labels_file(self, labels_file: str) -> 'VideoClassifierBuilder':
+        self.labels_file = labels_file
         return self
     
     def with_frame_count(self, num_frames: int) -> 'VideoClassifierBuilder':
@@ -226,6 +227,7 @@ class VideoClassifierBuilder:
     def build(self) -> VideoClassifier:
         return VideoClassifier(
             model_path=self.model_path,
+            labels_file=self.labels_file,
             num_frames=self.num_frames,
             top_k=self.top_k
         )

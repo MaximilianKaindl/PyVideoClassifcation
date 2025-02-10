@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
 import logging
@@ -9,29 +8,16 @@ from transformers import CLIPProcessor, CLIPModel
 from PIL import Image
 import numpy as np
 
+from util.labels import Labels, get_default_labels, parse_labels_file
+
 class ModelError(Exception):
     """Custom exception for model-related errors"""
     pass
 
-class TaskType(Enum):
-    """Types of classification tasks"""
-    RECORDING = "recording"
-    CONTENT = "content"
-    GENRE = "genre"
-
-@dataclass
-class TaskPrompts:
-    """Prompts for each classification task"""
-    recording: List[str]
-    content: List[str]
-    genre: List[str]
-
 @dataclass
 class ModelOutput:
-    """Model output containing logits for each task"""
-    recording: torch.Tensor
-    content: torch.Tensor
-    genre: torch.Tensor
+    """Model output containing logits for each category"""
+    logits: Dict[str, torch.Tensor]
 
 class CLIPVideoNet(nn.Module):
     """Neural network model for multi-task video classification using CLIP"""
@@ -41,7 +27,8 @@ class CLIPVideoNet(nn.Module):
     def __init__(
         self,
         clip_model_name: str = DEFAULT_MODEL,
-        device: Optional[torch.device] = None
+        device: Optional[torch.device] = None,
+        labels_file: Optional[str] = None
     ):
         super().__init__()
         self.logger = logging.getLogger(__name__)
@@ -54,8 +41,11 @@ class CLIPVideoNet(nn.Module):
         # Initialize CLIP components
         self._initialize_clip(clip_model_name)
         
-        # Define classification prompts
-        self.prompts = self._initialize_prompts()
+        # Initialize labels
+        self.labels = (
+            parse_labels_file(labels_file) if labels_file
+            else get_default_labels()
+        )
         
         # Pre-compute text features
         self.text_features = self._precompute_text_features()
@@ -79,34 +69,6 @@ class CLIPVideoNet(nn.Module):
             self.logger.error(f"Failed to initialize CLIP model: {str(e)}")
             raise ModelError(f"CLIP initialization failed: {str(e)}")
     
-    def _initialize_prompts(self) -> TaskPrompts:
-        """Initialize text prompts for each classification task"""
-        return TaskPrompts(
-            recording=[
-                "a professional recording with high production value",
-                "an amateur recording with low production value"
-            ],
-            content=[
-                "a video showing a lecture or educational content",
-                "a video showing entertainment or performance",
-                "a video showing news or journalism",
-                "a video showing promotional or advertising content"
-            ],
-            genre=[
-                "a comedy video",
-                "a drama video",
-                "an action video",
-                "a documentary video",
-                "a horror video",
-                "a romance video",
-                "a sci-fi video",
-                "a thriller video",
-                "a mystery video",
-                "a musical video",
-                "an animation video"
-            ]
-        )
-    
     def _compute_text_features(self, prompts: List[str]) -> torch.Tensor:
         """Compute CLIP text features for given prompts"""
         try:
@@ -126,20 +88,13 @@ class CLIPVideoNet(nn.Module):
             self.logger.error(f"Failed to compute text features: {str(e)}")
             raise ModelError(f"Text feature computation failed: {str(e)}")
     
-    def _precompute_text_features(self) -> Dict[TaskType, torch.Tensor]:
-        """Pre-compute text features for all tasks"""
+    def _precompute_text_features(self) -> Dict[str, torch.Tensor]:
+        """Pre-compute text features for all categories"""
         try:
             with torch.no_grad():
                 return {
-                    TaskType.RECORDING: self._compute_text_features(
-                        self.prompts.recording
-                    ),
-                    TaskType.CONTENT: self._compute_text_features(
-                        self.prompts.content
-                    ),
-                    TaskType.GENRE: self._compute_text_features(
-                        self.prompts.genre
-                    )
+                    category: self._compute_text_features(labels)
+                    for category, labels in self.labels.categories.items()
                 }
         except Exception as e:
             self.logger.error(f"Failed to precompute text features: {str(e)}")
@@ -180,7 +135,7 @@ class CLIPVideoNet(nn.Module):
             frames: List of frames as numpy arrays (RGB format)
             
         Returns:
-            ModelOutput containing logits for each classification task
+            ModelOutput containing logits for each classification category
             
         Raises:
             ModelError: If forward pass fails
@@ -192,21 +147,15 @@ class CLIPVideoNet(nn.Module):
             # Average features across frames
             averaged_features = image_features.mean(dim=0, keepdim=True)
             
-            # Compute logits for each task
+            # Compute logits for each category
             with torch.no_grad():
                 logit_scale = self.clip.logit_scale.exp()
+                category_logits = {}
                 
-                return ModelOutput(
-                    recording=logit_scale * averaged_features @ self.text_features[
-                        TaskType.RECORDING
-                    ].t(),
-                    content=logit_scale * averaged_features @ self.text_features[
-                        TaskType.CONTENT
-                    ].t(),
-                    genre=logit_scale * averaged_features @ self.text_features[
-                        TaskType.GENRE
-                    ].t()
-                )
+                for category, text_features in self.text_features.items():
+                    category_logits[category] = logit_scale * averaged_features @ text_features.t()
+                
+                return ModelOutput(logits=category_logits)
                 
         except Exception as e:
             self.logger.error(f"Forward pass failed: {str(e)}")
@@ -218,6 +167,7 @@ class ModelBuilder:
     def __init__(self):
         self.model_name = CLIPVideoNet.DEFAULT_MODEL
         self.device = None
+        self.labels_file = None
     
     def with_model_name(self, model_name: str) -> 'ModelBuilder':
         self.model_name = model_name
@@ -227,15 +177,21 @@ class ModelBuilder:
         self.device = device
         return self
     
+    def with_labels_file(self, labels_file: str) -> 'ModelBuilder':
+        self.labels_file = labels_file
+        return self
+    
     def build(self) -> nn.Module:
         return CLIPVideoNet(
             clip_model_name=self.model_name,
-            device=self.device
+            device=self.device,
+            labels_file=self.labels_file
         )
 
 def create_model(
     model_name: Optional[str] = None,
-    device: Optional[torch.device] = None
+    device: Optional[torch.device] = None,
+    labels_file: Optional[str] = None
 ) -> nn.Module:
     """Create and initialize the CLIP-based video classification model"""
     builder = ModelBuilder()
@@ -244,5 +200,7 @@ def create_model(
         builder.with_model_name(model_name)
     if device:
         builder.with_device(device)
+    if labels_file:
+        builder.with_labels_file(labels_file)
         
     return builder.build()

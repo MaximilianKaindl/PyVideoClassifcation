@@ -1,13 +1,15 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
+import os
 from pathlib import Path
 import json
 import logging
 import re
 import subprocess
+import tempfile
 import threading
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 class HWAccelType(Enum):
@@ -57,7 +59,7 @@ class FFmpegError(Exception):
     """Custom exception for FFmpeg-related errors"""
     pass
 
-class VideoProcessor:
+class FFMPEGVideoProcessor:
     """Handles video processing operations using FFmpeg"""
     
     FRAME_READ_TIMEOUT = 10  # seconds
@@ -363,3 +365,147 @@ class VideoProcessor:
                     process.terminate()
                 except Exception as e:
                     self.logger.error(f"Process cleanup failed: {str(e)}")
+
+    def run_clip_classification(
+        self,
+        input_file: str,
+        model_file: str,
+        tokenizer_file: str,
+        labels: List[str],
+        output_file: str
+    ) -> None:
+        """
+        Run CLIP classification using FFmpeg
+        
+        Args:
+            input_file: Path to input video file
+            model_file: Path to CLIP model file
+            tokenizer_file: Path to tokenizer file
+            labels: List of labels to classify against
+            output_file: Path to save classification results
+            
+        Raises:
+            FFmpegError: If FFmpeg processing fails
+        """
+        # Create temporary labels file
+        temp_labels = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                f.write('\n'.join(labels))
+                temp_labels = f.name
+
+            cmd = [
+                str(self.ffmpeg_path),
+                '-i', str(input_file),
+                '-vf', (
+                    f'dnn_clip=dnn_backend=torch:model={model_file}:'
+                    f'device=cuda:labels={temp_labels}:tokenizer={tokenizer_file},'
+                    f'avgclass=output_file={output_file}'
+                ),
+                '-f', 'null', '-'
+            ]
+            
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                self.logger.debug(
+                    f"FFmpeg CLIP classification output:\n"
+                    f"stdout: {result.stdout}\n"
+                    f"stderr: {result.stderr}"
+                )
+                
+            except subprocess.CalledProcessError as e:
+                self.logger.error(
+                    f"FFmpeg CLIP classification failed:\n"
+                    f"stdout: {e.stdout}\n"
+                    f"stderr: {e.stderr}"
+                )
+                raise FFmpegError(f"CLIP classification failed: {str(e)}")
+                
+        finally:
+            if temp_labels and os.path.exists(temp_labels):
+                os.unlink(temp_labels)
+
+    def parse_clip_output(self, output_file: str) -> Tuple[str, float]:
+        """
+        Parse FFmpeg CLIP classification output file
+        
+        Args:
+            output_file: Path to classification output file
+            
+        Returns:
+            Tuple of (best label, probability)
+        """
+        try:
+            max_prob = 0
+            best_label = None
+            
+            with open(output_file, 'r') as f:
+                for line in f:
+                    label, prob = line.strip().split(': ')
+                    prob = float(prob)
+                    if prob > max_prob:
+                        max_prob = prob
+                        best_label = label
+            
+            # Clean up label text
+            if best_label:
+                best_label = re.sub(
+                    r'^a (?:video|photo) (?:recorded with|of) ',
+                    '',
+                    best_label
+                )
+                best_label = re.sub(r'^an? ', '', best_label)
+            
+            return best_label, max_prob
+            
+        except Exception as e:
+            self.logger.error(f"Failed to parse CLIP output: {str(e)}")
+            raise FFmpegError(f"CLIP output parsing failed: {str(e)}")
+
+    def write_clip_metadata(
+        self,
+        input_file: str,
+        output_file: str,
+        metadata: Dict
+    ) -> None:
+        """
+        Write classification metadata to output video file
+        
+        Args:
+            input_file: Path to input video
+            output_file: Path for output video
+            metadata: Dictionary of metadata to write
+            
+        Raises:
+            FFmpegError: If metadata writing fails
+        """
+        try:
+            metadata_str = json.dumps(metadata)
+            cmd = [
+                str(self.ffmpeg_path),
+                '-i', str(input_file),
+                '-metadata', f'comment={metadata_str}',
+                '-c:v', 'copy',
+                '-c:a', 'copy',
+                '-y', str(output_file)
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            self.logger.debug(
+                f"FFmpeg metadata writing output:\n"
+                f"stdout: {result.stdout}\n"
+                f"stderr: {result.stderr}"
+            )
+            
+        except subprocess.CalledProcessError as e:
+            self.logger.error(
+                f"FFmpeg metadata writing failed:\n"
+                f"stdout: {e.stdout}\n"
+                f"stderr: {e.stderr}"
+            )
+            raise FFmpegError(f"Metadata writing failed: {str(e)}")

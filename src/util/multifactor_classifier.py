@@ -1,20 +1,17 @@
 from dataclasses import dataclass
-from pathlib import Path
-import argparse
-import json
 import logging
-import threading
+from pathlib import Path
 from queue import Queue
+import threading
 from typing import Dict, Optional
-
-from transcription_service import (
+from classifier_services.transcription_service import (
     TranscriptionService,
     TranscriptionResult,
     TranscriberBuilder,
     TranscriptionConfig,
     TranscriptionTask
 )
-from video_classifier import VideoClassifier, VideoAnalysis, VideoClassifierBuilder
+from classifier_services.clip_inference_service import VideoClassifier, VideoAnalysis, VideoClassifierBuilder
 
 class ProcessingError(Exception):
     """Custom exception for video processing errors"""
@@ -27,7 +24,7 @@ class ProcessingResult:
     transcription: TranscriptionResult
     error: Optional[str] = None
 
-class MultimediaProcessor:
+class MultimediaClassifier:
     """Handles parallel processing of video files for classification and transcription"""
     
     def __init__(
@@ -152,113 +149,23 @@ class MultimediaProcessor:
                 error=str(e)
             )
 
-class MultimediaProcessorBuilder:
+class MultimediaClassifierBuilder:
     """Builder class for configuring MultimediaProcessor instances"""
     
     def __init__(self):
         self.classifier = None
         self.transcriber = None
     
-    def with_classifier(self, classifier: VideoClassifier) -> 'MultimediaProcessorBuilder':
+    def with_classifier(self, classifier: VideoClassifier) -> 'MultimediaClassifierBuilder':
         self.classifier = classifier
         return self
     
-    def with_transcriber(self, transcriber: TranscriptionService) -> 'MultimediaProcessorBuilder':
+    def with_transcriber(self, transcriber: TranscriptionService) -> 'MultimediaClassifierBuilder':
         self.transcriber = transcriber
         return self
     
-    def build(self) -> MultimediaProcessor:
-        return MultimediaProcessor(
+    def build(self) -> MultimediaClassifier:
+        return MultimediaClassifier(
             classifier=self.classifier,
             transcriber=self.transcriber
         )
-
-def setup_logging() -> None:
-    """Configure logging settings"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-
-def parse_arguments() -> argparse.Namespace:
-    """Parse command line arguments"""
-    parser = argparse.ArgumentParser(
-        description='Process video for transcription and classification'
-    )
-    parser.add_argument(
-        'input_path',
-        type=str,
-        help='Path to input video file'
-    )
-    return parser.parse_args()
-
-def format_transcription_result(result: TranscriptionResult) -> Dict:
-    """Format transcription result for JSON output"""
-    output = {
-        'text': result.text,
-        'language': result.language
-    }
-    
-    if result.chunks:
-        output['chunks'] = [
-            {
-                'start': chunk.start,
-                'end': chunk.end,
-                'text': chunk.text
-            }
-            for chunk in result.chunks
-        ]
-    
-    if result.error:
-        output['error'] = result.error
-    
-    return output
-
-def main() -> None:
-    """Main entry point"""
-    # Setup logging
-    setup_logging()
-    logger = logging.getLogger(__name__)
-    
-    try:
-        # Parse arguments
-        args = parse_arguments()
-        
-        # Create processor
-        processor = MultimediaProcessorBuilder().build()
-        
-        # Process video
-        logger.info(f"Processing video: {args.input_path}")
-        results = processor.process_video(args.input_path)
-        
-        if results.error:
-            logger.error(f"Processing failed: {results.error}")
-            return
-        
-        # Output results
-        print("\nTranscription Results:")
-        print(json.dumps(
-            format_transcription_result(results.transcription),
-            indent=2
-        ))
-        
-        print("\nVideo Classification Results:")
-        print(json.dumps(
-            {
-                'technical': vars(results.classification.technical),
-                'classifications': {
-                    task: [vars(pred) for pred in preds]
-                    for task, preds in vars(results.classification.classifications).items()
-                },
-                'scene_analysis': vars(results.classification.scene_analysis),
-                'audio_analysis': vars(results.classification.audio_analysis)
-            },
-            indent=2
-        ))
-        
-    except Exception as e:
-        logger.error(f"Error in main: {str(e)}")
-        raise
-
-if __name__ == "__main__":
-    main()
