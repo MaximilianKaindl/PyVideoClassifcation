@@ -7,7 +7,7 @@ import torch
 import numpy as np
 
 from util.clip_model import create_model
-from util.video_processor import FFMPEGVideoProcessor, VideoInfo, SceneAnalysis, AudioFeatures
+from util.ffmpeg_video_processor import FFMPEGVideoProcessor, VideoInfo, SceneAnalysis, AudioFeatures
 
 @dataclass
 class ClassificationResult:

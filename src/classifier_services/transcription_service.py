@@ -2,8 +2,6 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 import logging
-import os
-import subprocess
 import tempfile
 from typing import Dict, List, Optional
 import torch
@@ -14,6 +12,8 @@ from transformers import (
     AutoModelForSpeechSeq2Seq,
     Pipeline
 )
+
+from util.ffmpeg_video_processor import FFMPEGVideoProcessor
 
 class TranscriptionError(Exception):
     """Custom exception for transcription-related errors"""
@@ -56,7 +56,8 @@ class TranscriptionService:
         self,
         model_name: str = DEFAULT_MODEL,
         device: Optional[str] = None,
-        config: Optional[TranscriptionConfig] = None
+        config: Optional[TranscriptionConfig] = None,
+        video_processor: Optional[FFMPEGVideoProcessor] = None
     ):
         self.logger = logging.getLogger(__name__)
         
@@ -69,6 +70,9 @@ class TranscriptionService:
         self.processor = None
         self.model = None
         self.pipe: Optional[Pipeline] = None
+        
+        # Initialize video processor
+        self.video_processor = video_processor or FFMPEGVideoProcessor()
         
         self.logger.info(
             f"Initialized TranscriptionService using device: {self.device}"
@@ -112,35 +116,6 @@ class TranscriptionService:
             self.logger.error(f"Failed to load models: {str(e)}")
             raise TranscriptionError(f"Model loading failed: {str(e)}")
     
-    def _extract_audio(self, video_path: Path, output_path: Path) -> None:
-        """
-        Extract audio from video file using FFmpeg
-        
-        Args:
-            video_path: Path to input video
-            output_path: Path to output audio file
-            
-        Raises:
-            TranscriptionError: If audio extraction fails
-        """
-        try:
-            cmd = [
-                "./ffmpeg_tools/ffmpeg",
-                '-i', str(video_path),
-                '-vn',  # Disable video
-                '-acodec', 'pcm_s16le',
-                '-ar', str(self.config.sample_rate),
-                '-ac', '1',  # Mono audio
-                '-y',  # Overwrite output file
-                str(output_path)
-            ]
-            
-            subprocess.run(cmd, capture_output=True, check=True)
-            
-        except subprocess.SubprocessError as e:
-            self.logger.error(f"FFmpeg audio extraction failed: {str(e)}")
-            raise TranscriptionError(f"Audio extraction failed: {str(e)}")
-    
     def transcribe(
         self,
         video_path: str,
@@ -175,8 +150,16 @@ class TranscriptionService:
             temp_path = Path(temp_audio.name)
             
             try:
-                # Extract audio to temporary file
-                self._extract_audio(video_path, temp_path)
+                # Extract audio using video processor
+                audio_features = self.video_processor.extract_audio_features(
+                    str(video_path),
+                    str(temp_path),
+                    sample_rate=self.config.sample_rate
+                )
+                if audio_features.error:
+                    raise TranscriptionError(
+                        f"Audio extraction failed: {audio_features.error}"
+                    )
                 
                 # Load audio file
                 self.logger.info("Loading audio file")
@@ -242,6 +225,7 @@ class TranscriberBuilder:
         self.model_name = TranscriptionService.DEFAULT_MODEL
         self.device = None
         self.config = TranscriptionConfig()
+        self.video_processor = None
     
     def with_model(self, model_name: str) -> 'TranscriberBuilder':
         self.model_name = model_name
@@ -254,10 +238,18 @@ class TranscriberBuilder:
     def with_config(self, config: TranscriptionConfig) -> 'TranscriberBuilder':
         self.config = config
         return self
+        
+    def with_video_processor(
+        self,
+        video_processor: FFMPEGVideoProcessor
+    ) -> 'TranscriberBuilder':
+        self.video_processor = video_processor
+        return self
     
     def build(self) -> TranscriptionService:
         return TranscriptionService(
             model_name=self.model_name,
             device=self.device,
-            config=self.config
+            config=self.config,
+            video_processor=self.video_processor
         )

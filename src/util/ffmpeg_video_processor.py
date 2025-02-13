@@ -366,6 +366,78 @@ class FFMPEGVideoProcessor:
                 except Exception as e:
                     self.logger.error(f"Process cleanup failed: {str(e)}")
 
+    def extract_audio_features(
+        self,
+        video_path: str,
+        output_path: Optional[str] = None,
+        sample_rate: int = 44100
+    ) -> AudioFeatures:
+        """
+        Extract audio features from video file and optionally save to WAV
+        
+        Args:
+            video_path: Path to input video file
+            output_path: Optional path to save extracted audio
+            sample_rate: Desired sample rate for extracted audio
+            
+        Returns:
+            AudioFeatures object containing audio properties
+        """
+        # Create temp directory if it doesn't exist
+        temp_dir = Path("temp")
+        temp_dir.mkdir(exist_ok=True)
+        
+        # Use provided output path or create temporary one
+        temp_wav = Path(output_path) if output_path else (temp_dir / "temp_audio.wav")
+        
+        try:
+            # Extract audio to WAV
+            cmd = [
+                str(self.ffmpeg_path),
+                *self.hw_config.decode.split(),
+                '-i', str(Path(video_path).resolve()),
+                '-vn',  # Disable video
+                '-acodec', 'pcm_s16le',  # Use PCM format
+                '-ar', str(sample_rate),  # Set sample rate
+                '-ac', '1',  # Convert to mono
+                '-y',  # Overwrite output file
+                str(temp_wav.resolve())
+            ]
+            
+            subprocess.run(cmd, capture_output=True, check=True)
+            
+            # Analyze audio properties
+            audio_info = self._run_ffprobe(
+                str(temp_wav),
+                ['-show_format', '-show_streams', '-select_streams', 'a:0']
+            )
+            
+            stream = audio_info['streams'][0]
+            return AudioFeatures(
+                sample_rate=int(stream.get('sample_rate', 0)),
+                channels=int(stream.get('channels', 0)),
+                duration=float(audio_info['format'].get('duration', 0)),
+                bit_depth=int(stream.get('bits_per_sample', 0))
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Audio feature extraction failed: {str(e)}")
+            return AudioFeatures(
+                sample_rate=0,
+                channels=0,
+                duration=0.0,
+                bit_depth=0,
+                error=str(e)
+            )
+            
+        finally:
+            # Clean up temp file only if we created it
+            if not output_path and temp_wav.exists():
+                try:
+                    temp_wav.unlink()
+                except Exception as e:
+                    self.logger.warning(f"Failed to delete temp file: {str(e)}")
+                    
     def run_clip_classification(
         self,
         input_file: str,

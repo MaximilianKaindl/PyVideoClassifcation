@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import logging
 
 from util.labels import Labels, parse_labels_file
-from util.video_processor import FFMPEGVideoProcessor
+from util.ffmpeg_video_processor import FFMPEGVideoProcessor
 
 @dataclass
 class ClassificationResult:
