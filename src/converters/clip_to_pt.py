@@ -24,6 +24,8 @@ def export_clip_model(model_name, dataset_name, output_path):
         model.eval()
         scripted_model = torch.jit.script(model)
         
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
         scripted_model.save(output_path)
         
         loaded_model = torch.jit.load(output_path)
