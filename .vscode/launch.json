@@ -8,7 +8,7 @@
             "name": "FFMPEG Classify Video",
             "type": "debugpy",
             "request": "launch",
-            "program": "src/ffmpeg_classification/classify_movie.py",
+            "program": "src/run_ffmpeg_classify.py",
             "console": "integratedTerminal",
             "args": [
                 "--ffmpeg", "./ffmpeg_tools/ffmpeg",
@@ -22,7 +22,7 @@
             "name": "PYTHON Classify Video",
             "type": "debugpy",
             "request": "launch",
-            "program": "src/py_classification/main.py",
+            "program": "src/run_py_classify.py",
             "console": "integratedTerminal",
             "args": [
                 "resources/cartoon.mp4"
@@ -37,8 +37,8 @@
             "args": [
                 "ViT-B-32",
                 "datacomp_xl_s13b_b90k",
-                "out/openclip-vit-b-32.pt",
-                "resources/input.png"
+                "resources/models/openclip-vit-b-32.pt",
+                "resources/input.jpg"
             ]
         },
         {
@@ -50,8 +50,8 @@
             "args": [
                 "ViT-L-14",
                 "datacomp_xl_s13b_b90k",
-                "out/openclip-vit-l-14.pt",
-                "resources/input.png"
+                "resources/models/openclip-vit-l-14.pt",
+                "resources/input.jpg"
             ]
         }
     ]
