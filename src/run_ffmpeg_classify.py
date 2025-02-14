@@ -22,6 +22,15 @@ def setup_logging() -> None:
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
+def format_header_label(results: List[ClassificationResult]) -> str:
+    """Format classification results as HEADER: label format"""
+    header_labels = []
+    for result in results:
+        # Format as "CATEGORY: label" and include probability in parentheses
+        header_label = f"{result.category.upper()}: {result.label} ({result.probability:.2f})"
+        header_labels.append(header_label)
+    return ';'.join(header_labels)
+
 def main(
     ffmpeg_bin: str,
     input_file: str,
@@ -82,20 +91,14 @@ def main(
     input_path = Path(input_file)
     output_file = input_path.with_stem(f"{input_path.stem}_tagged")
     
-    # Format metadata
-    metadata = {
-        result.category: {
-            'label': result.label,
-            'probability': result.probability
-        }
-        for result in results
-    }
+    # Format metadata in HEADER: label format
+    header_label_metadata = format_header_label(results)
     
     # Write metadata
     logger.info("\nWriting final output with metadata...")
-    processor.write_clip_metadata(input_file, str(output_file), metadata)
+    processor.write_clip_metadata(input_file, str(output_file), header_label_metadata)
     logger.info(f"Success! Classifications written to: {output_file}")
-    logger.info(f"Final classifications: {metadata}")
+    logger.info(f"Final classifications: {header_label_metadata}")
 
 if __name__ == "__main__":
     import argparse
