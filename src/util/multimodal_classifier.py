@@ -7,13 +7,6 @@ import threading
 from queue import Queue
 from typing import Dict, List, Optional
 
-from classifier_services.transcription_service import (
-    TranscriptionService,
-    TranscriptionResult,
-    TranscriberBuilder,
-    TranscriptionConfig,
-    TranscriptionTask
-)
 from util.ffmpeg_video_processor import (
     FFMPEGVideoProcessor,
     VideoInfo,
@@ -41,7 +34,6 @@ class VideoAnalysis:
 class ProcessingResult:
     """Container for video processing results"""
     classification: VideoAnalysis
-    transcription: TranscriptionResult
     error: Optional[str] = None
 
 class ProcessingError(Exception):
@@ -49,14 +41,13 @@ class ProcessingError(Exception):
     pass
 
 class MultimodalClassifier:
-    """Handles parallel processing of video files for classification and transcription"""
+    """Handles parallel processing of video files for classification"""
     
     def __init__(
         self,
         model_path: Optional[str] = None,
         tokenizer_path: Optional[str] = None,
         labels_file: Optional[str] = None,
-        transcriber: Optional[TranscriptionService] = None
     ):
         self.logger = logging.getLogger(__name__)
         
@@ -69,42 +60,13 @@ class MultimodalClassifier:
         self.video_processor = FFMPEGVideoProcessor()
         self.labels = parse_labels_file(labels_file) if labels_file else get_default_labels()
         
-        # Initialize transcriber with improved defaults
-        self.transcriber = transcriber or TranscriberBuilder().\
-            with_config(TranscriptionConfig(
-                chunk_length_s=30,
-                batch_size=8,
-                return_timestamps=True
-            )).build()
-        
         # Initialize thread management
         self.threads: Dict[str, threading.Thread] = {}
         self.queues: Dict[str, Queue] = {
-            'transcription': Queue(),
             'classification': Queue()
         }
         
         self.logger.info("Initialized MultimediaClassifier")
-    
-    def _transcribe_video(self, video_path: Path) -> None:
-        """Run video transcription in separate thread"""
-        try:
-            result = self.transcriber.transcribe(
-                str(video_path),
-                language="en",
-                task=TranscriptionTask.TRANSCRIBE
-            )
-            self.queues['transcription'].put(result)
-            
-        except Exception as e:
-            self.logger.error(f"Transcription failed: {str(e)}")
-            self.queues['transcription'].put(
-                TranscriptionResult(
-                    text="",
-                    language="unknown",
-                    error=str(e)
-                )
-            )
     
     def _classify_video(self, video_path: Path) -> None:
         """Run video classification in separate thread"""
@@ -166,13 +128,13 @@ class MultimodalClassifier:
     
     def process_video(self, video_path: str) -> ProcessingResult:
         """
-        Process video for transcription and classification
+        Process video for classification
         
         Args:
             video_path: Path to input video file
             
         Returns:
-            ProcessingResult containing classification and transcription results
+            ProcessingResult containing classification results
             
         Raises:
             ProcessingError: If processing fails
@@ -186,11 +148,6 @@ class MultimodalClassifier:
             raise FileNotFoundError(f"Video file not found: {video_path}")
         
         try:
-            # Start processing threads
-            self.threads['transcription'] = threading.Thread(
-                target=self._transcribe_video,
-                args=(video_path,)
-            )
             self.threads['classification'] = threading.Thread(
                 target=self._classify_video,
                 args=(video_path,)
@@ -206,21 +163,17 @@ class MultimodalClassifier:
             
             # Collect results
             classification_result = self.queues['classification'].get()
-            transcription_result = self.queues['transcription'].get()
             
             # Check for errors
             error_messages = []
             if isinstance(classification_result, dict) and 'error' in classification_result:
                 error_messages.append(f"Classification: {classification_result['error']}")
-            if transcription_result.error:
-                error_messages.append(f"Transcription: {transcription_result.error}")
             
             if error_messages:
                 raise ProcessingError("; ".join(error_messages))
             
             return ProcessingResult(
                 classification=classification_result,
-                transcription=transcription_result
             )
             
         except Exception as e:
@@ -246,10 +199,6 @@ class MultimodalClassifier:
                         error="Processing failed"
                     )
                 ),
-                transcription=TranscriptionResult(
-                    text="",
-                    language="unknown"
-                ),
                 error=str(e)
             )
 
@@ -260,7 +209,6 @@ class MultimodalClassifierBuilder:
         self.model_path = None
         self.tokenizer_path = None
         self.labels_file = None
-        self.transcriber = None
     
     def with_model(self, model_path: str) -> 'MultimodalClassifierBuilder':
         self.model_path = model_path
@@ -274,14 +222,9 @@ class MultimodalClassifierBuilder:
         self.labels_file = labels_file
         return self
     
-    def with_transcriber(self, transcriber: TranscriptionService) -> 'MultimodalClassifierBuilder':
-        self.transcriber = transcriber
-        return self
-    
     def build(self) -> MultimodalClassifier:
         return MultimodalClassifier(
             model_path=self.model_path,
             tokenizer_path=self.tokenizer_path,
             labels_file=self.labels_file,
-            transcriber=self.transcriber
         )

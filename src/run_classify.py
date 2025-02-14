@@ -4,7 +4,6 @@ import json
 import logging
 from typing import Dict, Any
 
-from classifier_services.transcription_service import TranscriptionResult
 from util.multimodal_classifier import MultimodalClassifierBuilder
 from util.ffmpeg_video_processor import VideoInfo, SceneAnalysis, AudioFeatures
 
@@ -18,7 +17,7 @@ def setup_logging() -> None:
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
-        description='Process video for transcription and classification'
+        description='Process video for classification'
     )
     parser.add_argument(
         'input_path',
@@ -44,28 +43,6 @@ def parse_arguments() -> argparse.Namespace:
         default="resources/labels.txt"
     )
     return parser.parse_args()
-
-def format_transcription_result(result: TranscriptionResult) -> Dict[str, Any]:
-    """Format transcription result for JSON output"""
-    output = {
-        'text': result.text,
-        'language': result.language
-    }
-    
-    if result.chunks:
-        output['chunks'] = [
-            {
-                'start': chunk.start,
-                'end': chunk.end,
-                'text': chunk.text
-            }
-            for chunk in result.chunks
-        ]
-    
-    if result.error:
-        output['error'] = result.error
-    
-    return output
 
 def format_video_info(info: VideoInfo) -> Dict[str, Any]:
     """Format video technical info for JSON output"""
@@ -148,13 +125,6 @@ def main() -> None:
         if results.error:
             logger.error(f"Processing failed: {results.error}")
             return
-        
-        # Output results
-        print("\nTranscription Results:")
-        print(json.dumps(
-            format_transcription_result(results.transcription),
-            indent=2
-        ))
         
         print("\nVideo Classification Results:")
         print(json.dumps(

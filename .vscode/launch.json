@@ -5,24 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "FFMPEG Classify Video",
+            "name": "Classify Video",
             "type": "debugpy",
             "request": "launch",
-            "program": "src/run_ffmpeg_classify.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--ffmpeg", "./ffmpeg_tools/ffmpeg",
-                "--input", "resources/cartoon.mp4",
-                "--model", "resources/models/openclip-vit-l-14.pt",
-                "--tokenizer", "resources/tokenizer.json", 
-                "--labels", "resources/labels.txt"
-            ]
-        },
-        {
-            "name": "PYTHON Classify Video",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "src/run_py_classify.py",
+            "program": "src/run_classify.py",
             "console": "integratedTerminal",
             "args": [
                 "resources/cartoon.mp4"
