@@ -4,8 +4,7 @@ PyVideoClassifcation is a Python project for classifying videos using different 
 
 ## Features
 
-- **FFMPEG Classify Video**: Classify videos using FFMPEG CLIP Filter.
-- **Python Classify Video**: Classify videos with Python (CLIP and Whisper Transcription).
+- **Classify Video**: Classify videos (CLIP).
 - **Model Conversion**: Convert models to `.pt` format for usage with ffmpeg.
 
 ## Setup
