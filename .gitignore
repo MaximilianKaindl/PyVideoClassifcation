@@ -1,4 +1,5 @@
-/resources/models/*
+/resources
 .pyc
 out/*
-py_classification/__pycache__
+*/__pycache__/*
+*.pyc
