@@ -7,8 +7,8 @@ import threading
 from queue import Queue
 from typing import Dict, List, Optional
 
-from util.ffmpeg_video_processor import (
-    FFMPEGVideoProcessor,
+from service.ffmpeg_service import (
+    FFMPEGService,
     VideoInfo,
     SceneAnalysis,
     AudioFeatures
@@ -57,7 +57,7 @@ class MultimodalClassifier:
         self.labels_file = labels_file
         
         # Initialize components
-        self.video_processor = FFMPEGVideoProcessor()
+        self.video_processor = FFMPEGService()
         self.labels = parse_labels_file(labels_file) if labels_file else get_default_labels()
         
         # Initialize thread management
