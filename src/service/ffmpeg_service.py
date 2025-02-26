@@ -59,7 +59,7 @@ class FFmpegError(Exception):
     """Custom exception for FFmpeg-related errors"""
     pass
 
-class FFMPEGVideoProcessor:
+class FFMPEGService:
     """Handles video processing operations using FFmpeg"""
     
     FRAME_READ_TIMEOUT = 10  # seconds
@@ -151,7 +151,7 @@ class FFMPEGVideoProcessor:
         cmd = [
             str(self.ffmpeg_path),
             '-i', str(video_path),
-            '-vf', f"select='gt(scene,{self.SCENE_CHANGE_THRESHOLD})',showinfo",
+            '-vf', f"select='gt(scene,{self.SCENE_CHANGE_THRESHOLD})',metadata=print",
             '-f', 'null',
             '-'
         ]
@@ -168,16 +168,23 @@ class FFMPEGVideoProcessor:
             _, stderr = process.communicate()
             
             scene_times = []
+            current_time = None
+            
             for line in stderr.split('\n'):
-                if 'pts_time' in line and 'scene_score' in line:
-                    match = re.search(
-                        r'pts_time:([\d.]+).*scene_score:([\d.]+)',
-                        line
-                    )
+                # Extract pts_time
+                if 'pts_time' in line:
+                    match = re.search(r'pts_time:([\d.]+)', line)
                     if match:
-                        time, score = map(float, match.groups())
+                        current_time = float(match.group(1))
+                
+                # Extract scene score and check if it exceeds the threshold
+                if 'lavfi.scene_score' in line:
+                    match = re.search(r'lavfi.scene_score=([\d.]+)', line)
+                    if match and current_time is not None:
+                        score = float(match.group(1))
                         if score > self.SCENE_CHANGE_THRESHOLD:
-                            scene_times.append(time)
+                            scene_times.append(current_time)
+                            current_time = None  # Reset for the next scene
             
             return SceneAnalysis(
                 scene_changes=len(scene_times),
@@ -193,7 +200,7 @@ class FFMPEGVideoProcessor:
                 status='error',
                 error=str(e)
             )
-    
+
     def extract_audio_features(self, video_path: str) -> AudioFeatures:
         """Extract audio features using FFmpeg"""
         # Create temp directory if it doesn't exist
@@ -470,6 +477,7 @@ class FFMPEGVideoProcessor:
                 str(self.ffmpeg_path),
                 '-i', str(input_file),
                 '-vf', (
+                    f'select=gt(scene\,0.3),'
                     f'dnn_clip=dnn_backend=torch:model={model_file}:'
                     f'device=cuda:labels={temp_labels}:tokenizer={tokenizer_file},'
                     f'avgclass=output_file={output_file}'
@@ -581,3 +589,55 @@ class FFMPEGVideoProcessor:
                 f"stderr: {e.stderr}"
             )
             raise FFmpegError(f"Metadata writing failed: {str(e)}")
+        
+    def extract_audio_for_scenes(self, video_path: str, output_dir: str = "scene_audio") -> List[str]:
+        """
+        Extract audio segments for each detected scene and save as MP3 files.
+        
+        Args:
+            video_path: Path to the input video file.
+            output_dir: Directory to save the extracted MP3 files.
+            
+        Returns:
+            List of paths to the generated MP3 files.
+        """
+        # Ensure output directory exists
+        output_dir_path = Path(output_dir)
+        output_dir_path.mkdir(parents=True, exist_ok=True)
+        
+        # Perform scene analysis
+        scene_analysis = self.analyze_scenes(video_path)
+        if scene_analysis.status != 'success':
+            raise FFmpegError(f"Scene analysis failed: {scene_analysis.error}")
+        
+        # Get video duration for the last scene
+        video_info = self.get_video_info(video_path)
+        scene_timestamps = scene_analysis.scene_timestamps + [video_info.duration]
+        
+        # Extract audio for each scene
+        audio_files = []
+        for i, (start_time, end_time) in enumerate(zip(scene_timestamps[:-1], scene_timestamps[1:])):
+            output_file = output_dir_path / f"scene_{i+1}.m4a"
+            
+            cmd = [
+                str(self.ffmpeg_path),
+                '-i', str(video_path),
+                '-ss', str(start_time),
+                '-to', str(end_time),
+                '-q:a', '2',  # MP3 quality (2 is good quality)
+                '-map', 'a',  # Only process audio
+                '-c:a', 'aac',
+                '-ar', '48000',  # Resample audio to 48,000 Hz
+                '-y',  # Overwrite output file
+                str(output_file)
+            ]
+            
+            try:
+                subprocess.run(cmd, capture_output=True, check=True)
+                audio_files.append(str(output_file))
+                self.logger.info(f"Extracted audio for scene {i+1}: {output_file}")
+            except subprocess.CalledProcessError as e:
+                self.logger.error(f"Failed to extract audio for scene {i+1}: {str(e.stderr)}")
+                raise FFmpegError(f"Audio extraction failed for scene {i+1}: {str(e)}")
+        
+        return audio_files
